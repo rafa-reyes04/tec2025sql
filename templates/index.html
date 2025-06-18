@@ -159,11 +159,72 @@
             background: #fff;
         }
     </style>
+    <style id="dark-mode-style" disabled>
+        body {
+            background: #181a1b !important;
+            color: #e0e0e0 !important;
+        }
+
+        .chat {
+            background: #23272a !important;
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
+        }
+
+        .bubble {
+            background: #23272a !important;
+            color: #e0e0e0 !important;
+        }
+
+        .bubble.user {
+            background: #2d4739 !important;
+        }
+
+        .table-scroll,
+        table,
+        tr:nth-child(odd),
+        tr:nth-child(even) {
+            background: #23272a !important;
+            color: #e0e0e0 !important;
+        }
+
+        th,
+        td {
+            border-color: #444 !important;
+        }
+
+        input,
+        #question {
+            background: #23272a !important;
+            color: #e0e0e0 !important;
+            border: 1px solid #444 !important;
+        }
+
+        button {
+            background: #444 !important;
+            color: #e0e0e0 !important;
+        }
+
+        button:hover {
+            background: #222 !important;
+        }
+    </style>
 </head>
 
 <body>
+    <div style="text-align:right; max-width:900px; margin:0 auto;">
+        <button id="darkModeBtn" onclick="toggleDarkMode()" style="margin-bottom:10px;">🌙 Modo oscuro</button>
+    </div>
     <div class="chat">
         <h2 style="text-align:center; font-size:2em; margin-bottom: 20px;">🛍️ Asistente de Tienda IA</h2>
+        <form id="pdfForm" enctype="multipart/form-data" style="margin-bottom:20px;">
+            <label for="pdfFile"><b>Sube un PDF para hacerle preguntas:</b></label>
+            <input type="file" id="pdfFile" name="pdfFile" accept="application/pdf" required />
+            <button type="submit">Subir PDF</button>
+            <span id="pdfStatus" style="margin-left:10px;"></span>
+        </form>
+        <input id="pdfQuestion" placeholder="Pregunta sobre el PDF subido..." style="width: 100%; padding: 12px; display:none;" />
+        <button id="pdfAskBtn" style="display:none;" onclick="sendPdfQuestion()">Preguntar sobre PDF</button>
+        <div id="pdfChatLog"></div>
         <input id="question" placeholder="¿Qué productos se han vendido más?" style="width: 100%; padding: 12px;" />
         <button onclick="sendQuestion()">Preguntar</button>
         <div id="chatLog"></div>
@@ -226,6 +287,82 @@
         document.getElementById("question").addEventListener("keydown", function (e) {
             if (e.key === "Enter") sendQuestion();
         });
+
+        function toggleDarkMode() {
+            const style = document.getElementById('dark-mode-style');
+            const btn = document.getElementById('darkModeBtn');
+            if (style.disabled) {
+                style.disabled = false;
+                btn.textContent = '☀️ Modo claro';
+                localStorage.setItem('darkMode', 'on');
+            } else {
+                style.disabled = true;
+                btn.textContent = '🌙 Modo oscuro';
+                localStorage.setItem('darkMode', 'off');
+            }
+        }
+        // Mantener preferencia al recargar
+        window.onload = function () {
+            const style = document.getElementById('dark-mode-style');
+            const btn = document.getElementById('darkModeBtn');
+            if (localStorage.getItem('darkMode') === 'on') {
+                style.disabled = false;
+                btn.textContent = '☀️ Modo claro';
+            }
+        }
+
+        // --- PDF Upload y preguntas sobre PDF ---
+        document.getElementById('pdfForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const fileInput = document.getElementById('pdfFile');
+            const status = document.getElementById('pdfStatus');
+            if (!fileInput.files.length) return;
+            const formData = new FormData();
+            formData.append('pdf', fileInput.files[0]);
+            status.textContent = 'Subiendo...';
+            try {
+                const resp = await fetch('/upload_pdf', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await resp.json();
+                if (data.success) {
+                    status.textContent = 'PDF cargado correctamente.';
+                    document.getElementById('pdfQuestion').style.display = '';
+                    document.getElementById('pdfAskBtn').style.display = '';
+                } else {
+                    status.textContent = 'Error al cargar PDF.';
+                }
+            } catch {
+                status.textContent = 'Error de red al subir PDF.';
+            }
+        });
+        async function sendPdfQuestion() {
+            const q = document.getElementById('pdfQuestion').value.trim();
+            if (!q) return;
+            addPdfMessage(q, true);
+            document.getElementById('pdfQuestion').value = '';
+            showLoader(true);
+            try {
+                const resp = await fetch('/ask_pdf', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ question: q })
+                });
+                const data = await resp.json();
+                addPdfMessage(data.response);
+            } catch {
+                addPdfMessage('<span style="color:red">Error al conectar con el backend.</span>');
+            }
+            showLoader(false);
+        }
+        function addPdfMessage(content, isUser = false) {
+            const div = document.createElement('div');
+            div.className = 'bubble' + (isUser ? ' user' : '');
+            div.innerHTML = content;
+            document.getElementById('pdfChatLog').appendChild(div);
+            div.scrollIntoView({ behavior: 'smooth', block: 'end' });
+        }
     </script>
 </body>
 
